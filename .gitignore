@@ -1,0 +1,28 @@
+# Basically ignore everything
+*
+
+# Claude:
+!.claude/
+!.claude/**
+
+.claude/*
+
+!.claude/CLAUDE.md
+!.claude/TOOLS.md
+!.claude/mcp-servers.json
+!.claude/mcp-secrets.example.json
+!.claude/commands/
+
+.claude/commands/*
+
+!.claude/commands/init.md
+!.claude/commands/codereview.md
+!.claude/commands/codefix.md
+
+# 비밀값 (whitelist 가 늘어나도 절대 올라가지 않도록 마지막에 명시):
+.claude/mcp-secrets.json
+
+# git:
+!.gitignore
+!README.md
+!setup.ps1

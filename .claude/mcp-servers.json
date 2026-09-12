@@ -1,0 +1,83 @@
+{
+  "$comment": "Claude Code MCP 서버 선언. setup.ps1이 이 파일을 단일 진실 원천으로 사용한다. API 키·토큰·절대경로·사용자명은 절대 넣지 않는다.",
+  "$secrets": "requiresEnv/requiresHeaders에는 키 '이름'만 적는다. 값은 mcp-secrets.json(커밋 금지)에 두고 setup.ps1이 claude mcp add의 -e/-H로 주입한다. 커맨드라인 인자로 넘기면 claude mcp list 출력에 평문으로 찍힌다.",
+  "scope": "user",
+  "servers": [
+    {
+      "name": "context7",
+      "transport": "stdio",
+      "command": ["cmd", "/c", "context7-mcp"],
+      "globalPackages": ["@upstash/context7-mcp"],
+      "requiresEnv": ["CONTEXT7_API_KEY"],
+      "auth": null,
+      "purpose": "라이브러리·프레임워크·SDK 최신 문서 조회",
+      "note": "API 키가 필요하다. dist/index.js가 process.env.CONTEXT7_API_KEY를 읽으므로 -e로 주입한다. --api-key 인자는 쓰지 않는다. claude mcp list가 커맨드라인을 그대로 출력해 키가 노출된 적이 있다."
+    },
+    {
+      "name": "playwright",
+      "transport": "stdio",
+      "command": ["cmd", "/c", "npx", "-y", "@playwright/mcp@latest"],
+      "globalPackages": [],
+      "auth": null,
+      "purpose": "브라우저 자동화·UI 테스트·웹 스크래핑",
+      "note": "최초 실행 시 브라우저 바이너리를 내려받아 느릴 수 있다."
+    },
+    {
+      "name": "kordoc",
+      "transport": "stdio",
+      "command": ["cmd", "/c", "kordoc-mcp"],
+      "globalPackages": ["kordoc"],
+      "auth": null,
+      "purpose": "한국어 문서 파싱·생성·양식 처리(서식 채우기, 도장, 마스킹)",
+      "note": "패키지가 bin을 둘로 제공한다. kordoc은 CLI, kordoc-mcp가 MCP 서버다. npx로 띄우면 콜드스타트가 약 38초라 Claude Code의 30초 연결 타임아웃을 넘기므로 반드시 전역 설치 후 kordoc-mcp를 직접 실행해야 한다."
+    },
+    {
+      "name": "tavily",
+      "transport": "http",
+      "url": "https://mcp.tavily.com/mcp/",
+      "globalPackages": [],
+      "auth": "oauth",
+      "purpose": "웹 검색",
+      "note": "원격 서버라 API 키를 로컬에 두지 않는다. 새 기계에서는 Claude Code의 /mcp 에서 브라우저 OAuth 인증을 한 번 거쳐야 한다. 스크립트로 자동화할 수 없다."
+    },
+    {
+      "name": "notion",
+      "transport": "http",
+      "url": "https://mcp.notion.com/mcp",
+      "globalPackages": [],
+      "auth": "oauth",
+      "purpose": "Notion 페이지·데이터베이스 검색·생성·편집",
+      "note": "원격 서버라 API 키를 로컬에 두지 않는다. 새 기계에서는 Claude Code의 /mcp 에서 브라우저 OAuth 인증을 한 번 거쳐야 한다. 스크립트로 자동화할 수 없다."
+    },
+    {
+      "name": "rhwp",
+      "transport": "stdio",
+      "command": ["{claudeDir}\\bin\\rhwp\\rhwp.exe", "mcp-serve"],
+      "globalPackages": [],
+      "auth": null,
+      "purpose": "HWP/HWPX/HML 문서 렌더링·구조 추출·양식 채우기 (오픈소스 rhwp, Rust)",
+      "install": {
+        "type": "github-release-archive",
+        "repo": "edwardkim/rhwp",
+        "assetPattern": "rhwp-*-windows-x86_64.zip",
+        "checksumAsset": "SHA256SUMS.txt",
+        "extractTo": "bin\\rhwp"
+      },
+      "note": "npm 패키지가 아니라 GitHub 릴리스 바이너리다. setup.ps1이 없으면 다운로드 여부를 먼저 물어보고, gh release download로 받은 뒤 SHA256SUMS.txt로 무결성을 검증하고 나서만 설치한다. 실행은 `rhwp.exe mcp-serve`(stdio JSON-RPC)."
+    }
+  ],
+  "externallyManaged": [
+    {
+      "name": "claude.ai Google Drive",
+      "note": "claude.ai 계정 커넥터. 계정에 붙어 있어 기계별 설치·등록이 필요 없다."
+    },
+    {
+      "name": "claude.ai Gmail",
+      "note": "claude.ai 계정 커넥터. 기계별 설치·등록이 필요 없다."
+    },
+    {
+      "name": "claude.ai Google Calendar",
+      "note": "claude.ai 계정 커넥터. 기계별 설치·등록이 필요 없다."
+    }
+  ]
+}
