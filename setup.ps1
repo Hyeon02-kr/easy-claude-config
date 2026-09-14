@@ -244,7 +244,7 @@ if ($Check) {
 # settings.json 은 git이 다루지 않는다(로컬 라이브 설정이 진실 원천). 없을 때만
 # settings.example.json 을 그대로 복사해 최초 1회 만든다. 이미 있으면 절대 건드리지
 # 않는다 - 예전에 git이 이 파일을 동기화하다가 라이브 설정을 예제로 덮어쓴 사고가 있었다.
-Write-Section "[1/5] Claude Code 설정 파일"
+Write-Section "[1/6] Claude Code 설정 파일"
 
 if (Test-Path $settingsPath) {
     Write-Host "   있음    settings.json" -ForegroundColor Gray
@@ -285,8 +285,51 @@ if (Test-Path $secretsPath) {
     }
 }
 
+# ── 선택 설치 목록 ─────────────────────────────────
+# 기본값은 전체 설치다. -Check 에서는 프롬프트 없이 전부 선택된 것으로 보고 점검한다.
+Write-Section "[2/6] 설치 옵션 선택"
+
+$components = New-Object System.Collections.Generic.List[object]
+foreach ($s in $manifest.servers) {
+    $components.Add([PSCustomObject]@{ Name = $s.name; Label = "$($s.name) - $($s.purpose)" })
+}
+$components.Add([PSCustomObject]@{ Name = "discord"; Label = "discord - Stop/Notification/PermissionRequest/PostCompact 이벤트를 Discord webhook으로 알림" })
+
+$excluded = @{}
+
+if ($Check) {
+    Write-Host "   점검 모드 - 전체 선택된 것으로 보고 점검합니다." -ForegroundColor Gray
+} else {
+    Write-Host "   기본값은 전체 설치입니다:" -ForegroundColor Gray
+    for ($i = 0; $i -lt $components.Count; $i++) {
+        Write-Host ("   {0,2}. {1}" -f ($i + 1), $components[$i].Label) -ForegroundColor Gray
+    }
+    $answer = Read-Host "   전부 기본값대로 설치할까요? (Y/n/o, o=제외할 항목 고르기)"
+    if ($answer -match '^n') {
+        foreach ($c in $components) { $excluded[$c.Name] = $true }
+        Write-Host "   선택 설치 항목 전체 건너뜀" -ForegroundColor Gray
+    } elseif ($answer -match '^o') {
+        $pick = Read-Host "   제외할 번호를 쉼표로 입력하세요 (없으면 그냥 Enter)"
+        if (-not [string]::IsNullOrWhiteSpace($pick)) {
+            foreach ($tok in ($pick -split ',')) {
+                $idx = 0
+                if ([int]::TryParse($tok.Trim(), [ref]$idx) -and $idx -ge 1 -and $idx -le $components.Count) {
+                    $excluded[$components[$idx - 1].Name] = $true
+                }
+            }
+        }
+    }
+}
+
+$selectedServerNames = @($manifest.servers | Where-Object { -not $excluded.ContainsKey($_.name) } | ForEach-Object { $_.name })
+$installDiscord = -not $excluded.ContainsKey("discord")
+
+foreach ($name in $excluded.Keys) {
+    $skipped.Add("선택 안 함: $name")
+}
+
 # ── 1. 사전 프로그램 점검 ──────────────────────────
-Write-Section "[2/5] 사전 프로그램"
+Write-Section "[3/6] 사전 프로그램"
 
 $prereqs = @(
     @{ cmd = "python"; hint = "winget install Python.Python.3" },
@@ -307,10 +350,11 @@ foreach ($p in $prereqs) {
 }
 
 # ── 2. 전역 npm 패키지 ─────────────────────────────
-Write-Section "[3/5] 전역 npm 패키지"
+Write-Section "[4/6] 전역 npm 패키지"
 
 $needed = @()
 foreach ($s in $manifest.servers) {
+    if ($selectedServerNames -notcontains $s.name) { continue }
     if ($s.globalPackages) {
         $needed += $s.globalPackages
     }
@@ -350,7 +394,7 @@ if ($needed.Count -eq 0) {
 }
 
 # ── 3. MCP 서버 ────────────────────────────────────
-Write-Section "[4/5] MCP 서버"
+Write-Section "[5/6] MCP 서버"
 
 $live = @{}
 if (Test-CommandExists "claude") {
@@ -379,6 +423,7 @@ $forceOk = $false
 if ($Force -and -not $Check) {
     $toReplace = @()
     foreach ($s in $manifest.servers) {
+        if ($selectedServerNames -notcontains $s.name) { continue }
         if (-not $live.ContainsKey($s.name)) { continue }
         $cmd = Resolve-CommandTokens $s.command $claudeDir
         if ($s.transport -eq "http") { $exp = $s.url } else { $exp = ($cmd -join " ") }
@@ -399,6 +444,11 @@ if ($Force -and -not $Check) {
 }
 
 foreach ($s in $manifest.servers) {
+    if ($selectedServerNames -notcontains $s.name) {
+        Write-Host "   건너뜀  $($s.name) (선택 안 함)" -ForegroundColor Gray
+        continue
+    }
+
     if ($s.install) {
         $binOk = Ensure-LocalBinary $s
         if (-not $binOk) { continue }
@@ -496,14 +546,14 @@ foreach ($name in $live.Keys) {
 }
 
 # ── 4. 비밀 파일 ───────────────────────────────────
-Write-Section "[5/5] 비밀 파일"
+Write-Section "[6/6] 비밀 파일"
 
 # 이 파일은 스크립트가 만들지 않는다. mcp-secrets.example.json 을 보고 사람이 직접 채운다.
 if (Test-Path $secretsPath) {
     Write-Host "   있음    mcp-secrets.json" -ForegroundColor Gray
     $skipped.Add("비밀 파일: mcp-secrets.json")
 } else {
-    $needsSecret = @($manifest.servers | Where-Object { $_.requiresEnv -or $_.requiresHeaders })
+    $needsSecret = @($manifest.servers | Where-Object { ($selectedServerNames -contains $_.name) -and ($_.requiresEnv -or $_.requiresHeaders) })
     if ($needsSecret.Count -eq 0) {
         Write-Host "   불필요  mcp-secrets.json (키를 요구하는 서버가 없습니다)" -ForegroundColor Gray
     } else {
@@ -513,7 +563,9 @@ if (Test-Path $secretsPath) {
     }
 }
 
-if (Test-Path $discordCfg) {
+if (-not $installDiscord) {
+    Write-Host "   건너뜀  discord-config.json (선택 안 함)" -ForegroundColor Gray
+} elseif (Test-Path $discordCfg) {
     Write-Host "   있음    discord-config.json" -ForegroundColor Gray
     $skipped.Add("비밀 파일: discord-config.json")
 } elseif ($Check) {

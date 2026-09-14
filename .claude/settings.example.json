@@ -23,6 +23,40 @@
     "defaultMode": "auto"
   },
   "model": "Sonnet",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "python \"$HOME/.claude/scripts/discord-notify.py\"" }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "python \"$HOME/.claude/scripts/discord-notify.py\"" }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "python \"$HOME/.claude/scripts/discord-notify.py\"" }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "python \"$HOME/.claude/scripts/discord-notify.py\"" }
+        ]
+      }
+    ]
+  },
   "worktree": {
     "baseRef": "fresh"
   },
