@@ -2,8 +2,8 @@
 #
 # 멱등하다. 몇 번 돌려도 결과가 같고, 이미 맞는 항목은 건너뛴다.
 #
-# 이 스크립트는 .claude/settings.json 을 읽지도 쓰지도 않는다.
-# 그 파일은 git이 동기화한다. 여기서 손대면 pull 받은 설정을 덮어쓰게 된다.
+# .claude/settings.json 은 git이 다루지 않는다(로컬 라이브 설정이 진실 원천).
+# 이미 있으면 절대 건드리지 않고, 없을 때만 settings.example.json 을 복사해 만든다.
 #
 # 사용법:
 #   .\setup.ps1                  변경을 적용한다
@@ -37,12 +37,14 @@ foreach ($a in $ExtraArgs) {
 
 $ErrorActionPreference = "Continue"
 
-$repoRoot     = $PSScriptRoot
-$claudeDir    = Join-Path $repoRoot ".claude"
-$manifestPath = Join-Path $claudeDir "mcp-servers.json"
-$secretsPath  = Join-Path $claudeDir "mcp-secrets.json"
-$discordCfg   = Join-Path $claudeDir "scripts\discord-config.json"
-$claudeJson   = Join-Path $HOME ".claude.json"
+$repoRoot       = $PSScriptRoot
+$claudeDir      = Join-Path $repoRoot ".claude"
+$manifestPath   = Join-Path $claudeDir "mcp-servers.json"
+$secretsPath    = Join-Path $claudeDir "mcp-secrets.json"
+$discordCfg     = Join-Path $claudeDir "scripts\discord-config.json"
+$settingsPath   = Join-Path $claudeDir "settings.json"
+$settingsExPath = Join-Path $claudeDir "settings.example.json"
+$claudeJson     = Join-Path $HOME ".claude.json"
 
 $changed = New-Object System.Collections.Generic.List[string]
 $skipped = New-Object System.Collections.Generic.List[string]
@@ -238,6 +240,27 @@ if ($Check) {
     Write-Host "   점검 모드: 아무것도 변경하지 않습니다" -ForegroundColor Cyan
 }
 
+# ── 0. settings.json 부트스트랩 ────────────────────
+# settings.json 은 git이 다루지 않는다(로컬 라이브 설정이 진실 원천). 없을 때만
+# settings.example.json 을 그대로 복사해 최초 1회 만든다. 이미 있으면 절대 건드리지
+# 않는다 - 예전에 git이 이 파일을 동기화하다가 라이브 설정을 예제로 덮어쓴 사고가 있었다.
+Write-Section "[1/5] Claude Code 설정 파일"
+
+if (Test-Path $settingsPath) {
+    Write-Host "   있음    settings.json" -ForegroundColor Gray
+    $skipped.Add("설정 파일: settings.json")
+} elseif (-not (Test-Path $settingsExPath)) {
+    Write-Host "   settings.example.json 이 없어 settings.json 을 만들지 못했습니다." -ForegroundColor Red
+    $warned.Add("settings.example.json 없음 -> settings.json 을 만들지 못했습니다")
+} elseif ($Check) {
+    Write-Host "   없음    settings.json" -ForegroundColor Red
+    $warned.Add("settings.json 없음 -> setup.ps1 실행 시 settings.example.json 에서 생성합니다")
+} else {
+    Copy-Item $settingsExPath $settingsPath
+    Write-Host "   생성    settings.json (settings.example.json 에서 복사)" -ForegroundColor Green
+    $changed.Add("설정 파일 생성: settings.json")
+}
+
 # ── 매니페스트 로드 ────────────────────────────────
 if (-not (Test-Path $manifestPath)) {
     Write-Host ""
@@ -263,7 +286,7 @@ if (Test-Path $secretsPath) {
 }
 
 # ── 1. 사전 프로그램 점검 ──────────────────────────
-Write-Section "[1/4] 사전 프로그램"
+Write-Section "[2/5] 사전 프로그램"
 
 $prereqs = @(
     @{ cmd = "python"; hint = "winget install Python.Python.3" },
@@ -284,7 +307,7 @@ foreach ($p in $prereqs) {
 }
 
 # ── 2. 전역 npm 패키지 ─────────────────────────────
-Write-Section "[2/4] 전역 npm 패키지"
+Write-Section "[3/5] 전역 npm 패키지"
 
 $needed = @()
 foreach ($s in $manifest.servers) {
@@ -327,7 +350,7 @@ if ($needed.Count -eq 0) {
 }
 
 # ── 3. MCP 서버 ────────────────────────────────────
-Write-Section "[3/4] MCP 서버"
+Write-Section "[4/5] MCP 서버"
 
 $live = @{}
 if (Test-CommandExists "claude") {
@@ -473,7 +496,7 @@ foreach ($name in $live.Keys) {
 }
 
 # ── 4. 비밀 파일 ───────────────────────────────────
-Write-Section "[4/4] 비밀 파일"
+Write-Section "[5/5] 비밀 파일"
 
 # 이 파일은 스크립트가 만들지 않는다. mcp-secrets.example.json 을 보고 사람이 직접 채운다.
 if (Test-Path $secretsPath) {
