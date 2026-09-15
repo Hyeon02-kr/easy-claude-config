@@ -73,6 +73,45 @@ function Confirm-YesNo($prompt, [bool]$defaultYes = $false) {
     return $answer -match '^(y|yes)$'
 }
 
+# 스페이스바로 체크 토글, 위/아래 화살표로 이동, 엔터로 확정하는 콘솔 체크리스트.
+# $items 는 .Label 을 가진 객체 배열. 전부 체크된 상태로 시작해서 bool[] 를 돌려준다.
+# 입력이 리다이렉션돼 있는 등 진짜 콘솔이 아니면 ReadKey/CursorPosition 이 예외를
+# 던진다 - 그 경우 $null 을 돌려주고, 호출부가 번호 입력 방식으로 대체한다.
+function Select-Checklist($items) {
+    try {
+        $checked = New-Object bool[] $items.Count
+        for ($i = 0; $i -lt $items.Count; $i++) { $checked[$i] = $true }
+        $cursor = 0
+        $width = [Console]::WindowWidth
+
+        Write-Host "   스페이스: 선택/해제, 위/아래: 이동, 엔터: 확정" -ForegroundColor Gray
+        $listTop = [Console]::CursorTop
+
+        while ($true) {
+            [Console]::SetCursorPosition(0, $listTop)
+            for ($i = 0; $i -lt $items.Count; $i++) {
+                $box = if ($checked[$i]) { "[x]" } else { "[ ]" }
+                $prefix = if ($i -eq $cursor) { ">" } else { " " }
+                $line = "   $prefix $box $($items[$i].Label)"
+                if ($line.Length -ge $width) { $line = $line.Substring(0, $width - 1) }
+                Write-Host $line.PadRight($width - 1) -NoNewline
+                Write-Host ""
+            }
+
+            $key = [Console]::ReadKey($true)
+            switch ($key.Key) {
+                "UpArrow"   { $cursor = ($cursor - 1 + $items.Count) % $items.Count }
+                "DownArrow" { $cursor = ($cursor + 1) % $items.Count }
+                "Spacebar"  { $checked[$cursor] = -not $checked[$cursor] }
+                "Enter"     { return $checked }
+                default     { }
+            }
+        }
+    } catch {
+        return $null
+    }
+}
+
 function Get-PropNames($obj) {
     if ($null -eq $obj) { return @() }
     return @($obj.PSObject.Properties | ForEach-Object { $_.Name })
@@ -300,15 +339,19 @@ $excluded = @{}
 if ($Check) {
     Write-Host "   점검 모드 - 전체 선택된 것으로 보고 점검합니다." -ForegroundColor Gray
 } else {
-    Write-Host "   기본값은 전체 설치입니다:" -ForegroundColor Gray
-    for ($i = 0; $i -lt $components.Count; $i++) {
-        Write-Host ("   {0,2}. {1}" -f ($i + 1), $components[$i].Label) -ForegroundColor Gray
-    }
-    $answer = Read-Host "   전부 기본값대로 설치할까요? (Y/n/o, o=제외할 항목 고르기)"
-    if ($answer -match '^n') {
-        foreach ($c in $components) { $excluded[$c.Name] = $true }
-        Write-Host "   선택 설치 항목 전체 건너뜀" -ForegroundColor Gray
-    } elseif ($answer -match '^o') {
+    Write-Host "   기본값은 전체 설치입니다. 원치 않는 항목은 체크 해제하세요." -ForegroundColor Gray
+    $checked = Select-Checklist $components
+
+    if ($null -ne $checked) {
+        for ($i = 0; $i -lt $components.Count; $i++) {
+            if (-not $checked[$i]) { $excluded[$components[$i].Name] = $true }
+        }
+    } else {
+        # 대화형 콘솔이 아니면(리다이렉션 등) 체크리스트를 못 그린다 - 번호 입력으로 대체.
+        Write-Host "   (대화형 콘솔이 아니라 체크리스트를 못 그립니다 - 번호로 대신합니다)" -ForegroundColor Yellow
+        for ($i = 0; $i -lt $components.Count; $i++) {
+            Write-Host ("   {0,2}. {1}" -f ($i + 1), $components[$i].Label) -ForegroundColor Gray
+        }
         $pick = Read-Host "   제외할 번호를 쉼표로 입력하세요 (없으면 그냥 Enter)"
         if (-not [string]::IsNullOrWhiteSpace($pick)) {
             foreach ($tok in ($pick -split ',')) {
