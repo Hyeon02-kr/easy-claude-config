@@ -32,6 +32,16 @@ MCP 서버·스킬·플러그인 개별 사용법·주의사항을 정리한 개
 - **트리거**: 브라우저 동작 확인·UI 테스트·스크래핑이 필요한 상황
 - **특이사항**: 창은 사용자와 공유하는 실브라우저다 — 로그인·캡차·파일 선택처럼 자동화가 막히는 지점은 억지로 우회하지 말고 사용자에게 직접 조작을 요청하고, `browser_snapshot`(접근성 트리)을 기본으로 쓴다(`browser_take_screenshot`은 명시 요청 시에만).
 
+### claude-design (Claude Design, 2026-09-26 연결)
+- **용도**: claude.ai/design 프로젝트(목업·슬라이드 덱 등)를 터미널에서 생성·편집. 사용자는 웹 편집기에서 시안을 보며 코멘트/직접 편집, PDF·PPTX 내보내기는 웹 편집기에서만 가능(MCP 도구에 없음).
+- **연결**: `claude mcp add --scope user --transport http claude-design https://api.anthropic.com/v1/design/mcp` → 사용자가 `/design-login`. 서버 URL은 공식 Help Center 본문 추출 시 잘려서 공식 이슈 #77620에서 확인함.
+- **실측한 요령**:
+  - `get_claude_design_prompt`를 `write_files` 전에 반드시 호출(제작 지침·`.dc.html` 형식·덱 규칙이 여기 있음).
+  - 쓰기(`write_files`/`create_support_js`)는 plan_token 필수 — plan_token 없이 호출하면 거부됨. 반복 편집은 `finalize_plan(scope:"project")`로 약 4시간짜리 토큰 하나를 받아 쓴다.
+  - 덱을 직접 만든 `deck-stage.js`로 구현할 때, 비활성 슬라이드를 `display:none`으로 숨기면 슬라이드 쪽 클래스(`display:flex`)가 선택자 우선순위로 이겨 전 슬라이드가 겹쳐 보인다 → `visibility`로 숨긴다. 인쇄 규칙에 `display:block!important`를 넣으면 flex 레이아웃이 깨진다.
+  - `render_preview`의 `serve_url`은 토큰이 박힌 URL — 사용자에게 보여주거나 파일에 남기지 않는다. 사용자에게는 `open_url`(claude.ai/design 링크)만 준다.
+  - 검증 루프에서 Playwright 스크린샷이 필요하다(제작 지침이 스크린샷을 기준으로 삼음). 위 playwright 항목의 "스크린샷은 명시 요청 시에만" 원칙의 예외로 쓰고, 찍은 파일과 `.playwright-mcp/` 산출물은 확인 직후 삭제한다(B3).
+
 ### kordoc (한국어 문서 파싱·생성)
 - **용도**: HWP/HWPX/PDF/DOCX/XLSX 등 파싱→마크다운, 마크다운→HWPX 생성, 문서 diff, 렌더(PNG/SVG), 서식 채우기
 - **중요 제약 (실측 확인, 2026-08-16~17)**:
@@ -113,6 +123,9 @@ kordoc + hwpx-skill 조합으로 학교 과제용 보고서를 만들 때 확인
 ### superpowers
 - **자동 업데이트됨**: 설치 후에도 `lastUpdated`가 계속 갱신되는 것 확인됨.
 - **호출 원칙**: 표에 없는 상황이라도 1%라도 맞으면 반드시 먼저 호출한다(`CLAUDE.md` B6). 아래 표는 대표 예시일 뿐이다 — 갱신되면 같이 최신화한다.
+- **writing-plans 경량화**: 스킬 기본 지침은 구현 코드 전문을 싣게 해 플랜이 1,000줄을 넘기기 쉽다(실측: 플랜 28개 중 15개가 1,000줄 초과). 개인 오버라이드 노트를 스킬 호출 직전에 주입하는 `PreToolUse`(matcher `Skill`) 훅으로 "코드는 시그니처·핵심 로직만, 분량은 약 500줄 이내"를 유도한다. 훅은 스킬 이름을 stdin의 `tool_input.skill`로 받고(실측), 훅 출력 상한이 10,000자라 노트는 그 안에 둔다. 이 훅과 노트 파일은 이 레포에 없다.
+  - **효과 (2026-09-30, 같은 스펙 기준 각 조건 2회, 서브에이전트를 병렬로 돌려 시간은 근사)**: 줄 수 -79%, 시간 -41%, 토큰 -18%. 규칙 없이 돌린 2회는 모두 스펙에 없는 인터페이스를 알리지 않고 추가했다.
+  - **주의**: 임시 폴더를 `rm -rf /tmp/tmp*/` 같은 넓은 글롭으로 지우면 다른 프로세스의 임시 폴더까지 지울 수 있다. 만든 경로를 변수로 받아 그 경로만 삭제할 것.
 
 | 상황 | 호출 스킬 |
 |------|-----------|
