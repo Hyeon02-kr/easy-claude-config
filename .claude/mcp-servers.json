@@ -78,6 +78,14 @@
     {
       "name": "claude.ai Google Calendar",
       "note": "claude.ai 계정 커넥터. 기계별 설치·등록이 필요 없다."
+    },
+    {
+      "name": "claude.ai Claude Docs",
+      "note": "claude.ai 계정 커넥터. 기계별 설치·등록이 필요 없다."
+    },
+    {
+      "name": "claude-design",
+      "note": "setup.ps1이 등록하지 않는다. 기계마다 `claude mcp add`로 직접 등록하고 `/design-login`으로 로그인하는 방식이며(방법은 TOOLS.md의 claude-design 항목 참고), 계정에 Claude Design 접근 권한이 있어야 한다."
     }
   ]
 }
